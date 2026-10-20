@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit to Time - Spotify feature prototype</title>
+<style>
+:root{--bg:#121212;--card:#1d1d1d;--card2:#282828;--text:#fff;--muted:#b3b3b3;--green:#1ed760;--line:#333}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+.wrap{max-width:720px;margin:0 auto;padding:1.5rem 1.1rem 3rem}
+h1{font-size:clamp(1.7rem,6vw,2.4rem);margin:.2rem 0}
+.note{color:var(--muted);margin:0 0 1.5rem}
+.card{background:var(--card);border-radius:14px;padding:1.2rem;margin-bottom:1.2rem}
+label,.lbl{display:block;font-weight:700;margin-bottom:.5rem}
+.row{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.1rem}
+.chip{font:inherit;color:var(--text);background:var(--card2);border:1px solid transparent;border-radius:999px;padding:.4rem 1rem;cursor:pointer}
+.chip.on{background:#fff;color:#000}
+.chip:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+.mins{display:flex;align-items:center;gap:.8rem;margin-bottom:1.1rem}
+.mins input[type=range]{flex:1;accent-color:var(--green)}
+.mins output{min-width:5.5rem;text-align:right;font-weight:700;font-size:1.3rem}
+.go{font:inherit;font-weight:700;color:#000;background:var(--green);border:0;border-radius:999px;padding:.7rem 1.8rem;cursor:pointer}
+.go:hover{filter:brightness(1.1)}
+.ghost{font:inherit;color:var(--text);background:none;border:1px solid var(--muted);border-radius:999px;padding:.6rem 1.3rem;cursor:pointer;margin-left:.5rem}
+.sum{display:flex;flex-wrap:wrap;gap:1.2rem;margin-bottom:.6rem}
+.sum div strong{display:block;font-size:1.4rem}
+.sum span{color:var(--muted);font-size:.9rem}
+.fade{background:var(--card2);border-left:4px solid var(--green);padding:.6rem .8rem;border-radius:6px;margin:.8rem 0}
+.curve{display:flex;align-items:flex-end;gap:3px;height:70px;margin:1rem 0}
+.curve i{flex:1;background:var(--green);border-radius:3px 3px 0 0;min-width:3px}
+ol{list-style:none;margin:0;padding:0}
+li.t{display:grid;grid-template-columns:2rem 1fr auto;gap:.6rem;align-items:center;padding:.55rem .3rem;border-bottom:1px solid var(--line)}
+li.t .n{color:var(--muted);text-align:center}
+li.t .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+li.t small{display:block;color:var(--muted)}
+li.t .d{color:var(--muted);font-variant-numeric:tabular-nums}
+.empty{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Fit to time</h1>
+  <p class="note">Prototype of a proposed Spotify feature. Tell it how long you have and it builds a playlist that ends on time. Uses a sample library of made-up tracks.</p>
+
+  <div class="card">
+    <span class="lbl">What are you doing?</span>
+    <div class="row" id="presets">
+      <button class="chip on" data-m="25">Study round (25)</button>
+      <button class="chip" data-m="40">Commute (40)</button>
+      <button class="chip" data-m="30">Workout (30)</button>
+      <button class="chip" data-m="60">Deep work (60)</button>
+    </div>
+
+    <label for="mins">How much time do you have?</label>
+    <div class="mins">
+      <input id="mins" type="range" min="10" max="90" value="25">
+      <output id="minsOut" for="mins">25 min</output>
+    </div>
+
+    <span class="lbl">How should the energy move?</span>
+    <div class="row" id="curves">
+      <button class="chip on" data-c="build">Build up</button>
+      <button class="chip" data-c="wind">Wind down</button>
+      <button class="chip" data-c="steady">Steady</button>
+    </div>
+
+    <button class="go" id="go">Make my playlist</button>
+    <button class="ghost" id="again" hidden>Try another mix</button>
+  </div>
+
+  <div class="card" id="result" hidden aria-live="polite"></div>
+</div>
+
+<script>
+// Sample library: [title, artist, seconds, energy 1-10]
+const LIB = [
+  ["Paper Lanterns","Ora Vale",172,3],["Low Tide Letters","Ora Vale",205,2],["Static Bloom","Neon Harbor",198,7],
+  ["Midnight Bus","Kiran & the Echoes",226,4],["Glass Orchard","Neon Harbor",187,5],["Run the Clock","Veer",214,9],
+  ["Slow Monsoon","Meera Sol",243,2],["Copper Skyline","Kiran & the Echoes",201,6],["Afterglow Drive","Veer",233,8],
+  ["Tin Roof Rain","Meera Sol",159,3],["Pulse Garden","Neon Harbor",189,8],["Soft Reset","Ora Vale",176,1],
+  ["Chalk Marks","The Lanterns",208,5],["Open Window","The Lanterns",194,4],["Fast Lane Lullaby","Veer",221,7],
+  ["Ember Hours","Meera Sol",252,3],["Weightless","Kiran & the Echoes",183,6],["Sunday Static","Neon Harbor",211,5],
+  ["Highline","Veer",196,9],["Quiet Compass","Ora Vale",238,2],["Rooftop Weather","The Lanterns",204,6],
+  ["Neon Monsoon","Neon Harbor",217,8],["Warm Signal","Meera Sol",168,4],["Breakpoint","Veer",185,10],
+  ["Lantern Walk","The Lanterns",229,3],["Orbit Home","Kiran & the Echoes",246,5],["Sprint Season","Veer",178,9],
+  ["Fogbound","Ora Vale",215,2],["Daybreak Loop","The Lanterns",191,6],["Tape Hiss Summer","Neon Harbor",200,5],
+  ["Last Lap","Veer",207,10],["Evening Raga Remix","Meera Sol",261,4],["Paper Planes","Kiran & the Echoes",174,7],
+  ["Breathing Room","Ora Vale",193,1],["Switchback","The Lanterns",199,7],["Clear Skies","Meera Sol",188,6]
+];
+
+const $ = (id) => document.getElementById(id);
+let curve = "build";
+
+function fmt(s){ return Math.floor(s/60) + ":" + String(s%60).padStart(2,"0"); }
+function shuffle(a){ a = a.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+// Subset-sum search: find tracks whose total length is as close to the target as possible.
+// Overshoot up to MAXOVER seconds is allowed; the last track then fades out early to land exactly.
+function pick(pool, target){
+  const MAXOVER = 45, limit = target + MAXOVER;
+  const reach = new Uint8Array(limit + 1), from = new Int16Array(limit + 1).fill(-1);
+  reach[0] = 1;
+  pool.forEach((t, i) => {
+    const d = t[2];
+    for(let s = limit; s >= d; s--){
+      if(!reach[s] && reach[s-d]){ reach[s] = 1; from[s] = i; }
+    }
+  });
+  // best sum: smallest distance to target, preferring overshoot (can be trimmed) over a gap
+  let best = 0;
+  for(let s = 0; s <= limit; s++){
+    if(!reach[s]) continue;
+    const better = Math.abs(s-target) < Math.abs(best-target) ||
+      (Math.abs(s-target) === Math.abs(best-target) && s > best);
+    if(better) best = s;
+  }
+  const chosen = [];
+  for(let s = best; s > 0; s -= pool[from[s]][2]) chosen.push(pool[from[s]]);
+  return { tracks: chosen, total: best };
+}
+
+function build(){
+  const target = Number($("mins").value) * 60;
+  let pool = LIB;
+  if(curve === "steady") pool = LIB.filter(t => t[3] >= 4 && t[3] <= 6);
+  const { tracks, total } = pick(shuffle(pool), target);
+
+  // order the chosen tracks by the energy shape
+  tracks.sort((a,b) => curve === "wind" ? b[3]-a[3] : a[3]-b[3]);
+  if(curve === "steady") tracks.sort(() => Math.random() - .5);
+
+  const over = total - target;           // seconds to trim from the last track
+  const gap = target - total;            // seconds short (rare)
+  const last = tracks[tracks.length-1];
+  let note = "";
+  if(over > 0) note = `<div class="fade">The last track, "${last[0]}", fades out ${over}s early so the playlist ends exactly at ${fmt(target)}.</div>`;
+  else if(gap > 0) note = `<div class="fade">Ends ${gap}s before your time is up.</div>`;
+  else note = `<div class="fade">Perfect fit. No trimming needed.</div>`;
+
+  const bars = tracks.map(t => `<i style="height:${t[3]*10}%" title="${t[0]}: energy ${t[3]}"></i>`).join("");
+  const rows = tracks.map((t,i) => `<li class="t"><span class="n">${i+1}</span><span class="name">${t[0]}<small>${t[1]}</small></span><span class="d">${fmt(t[2])}</span></li>`).join("");
+
+  $("result").hidden = false;
+  $("result").innerHTML = `
+    <div class="sum">
+      <div><strong>${fmt(target)}</strong><span>You asked for</span></div>
+      <div><strong>${fmt(Math.min(total,target))}</strong><span>Playlist plays for</span></div>
+      <div><strong>${tracks.length}</strong><span>Tracks</span></div>
+    </div>
+    ${note}
+    <div class="lbl" style="margin-top:1rem">Energy across the playlist</div>
+    <div class="curve" role="img" aria-label="Bar chart of track energy in play order">${bars}</div>
+    <ol>${rows}</ol>`;
+  $("again").hidden = false;
+}
+
+// controls
+$("mins").addEventListener("input", () => {
+  $("minsOut").textContent = $("mins").value + " min";
+  document.querySelectorAll("#presets .chip").forEach(c => c.classList.toggle("on", c.dataset.m === $("mins").value));
+});
+$("presets").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip"); if(!b) return;
+  $("mins").value = b.dataset.m; $("mins").dispatchEvent(new Event("input"));
+});
+$("curves").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip"); if(!b) return;
+  curve = b.dataset.c;
+  document.querySelectorAll("#curves .chip").forEach(c => c.classList.toggle("on", c === b));
+});
+$("go").addEventListener("click", build);
+$("again").addEventListener("click", build);
+</script>
+</body>
+</html>
